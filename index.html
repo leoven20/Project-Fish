@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Sea Fishing RNG</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .glow-common { box-shadow: 0 0 25px -5px rgba(148, 163, 184, 0.3); }
+        .glow-uncommon { box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.4); }
+        .glow-rare { box-shadow: 0 0 25px -5px rgba(14, 165, 233, 0.5); }
+        .glow-epic { box-shadow: 0 0 30px -5px rgba(168, 85, 247, 0.6); }
+        .glow-legendary { box-shadow: 0 0 35px 0px rgba(234, 179, 8, 0.7); }
+
+        /* Full-screen sea, fixed behind everything */
+        .sea-scene {
+            position: fixed;
+            inset: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .wave-scroll-back { animation: waveScroll 20s linear infinite; }
+        .wave-scroll-front { animation: waveScroll 12s linear infinite reverse; }
+        @keyframes waveScroll {
+            from { transform: translateX(0); }
+            to   { transform: translateX(-50%); }
+        }
+
+        .drift { animation: drift 16s ease-in-out infinite; }
+        @keyframes drift {
+            0%, 100% { transform: translate(0, 0); }
+            50%      { transform: translate(24px, -10px); }
+        }
+
+        .shimmer {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.16) 48%, transparent 66%);
+            background-size: 250% 250%;
+            animation: shimmerSweep 5s ease-in-out infinite;
+            mix-blend-mode: screen;
+        }
+        @keyframes shimmerSweep {
+            0%   { background-position: 120% -20%; }
+            50%  { background-position: -20% 120%; }
+            100% { background-position: 120% -20%; }
+        }
+
+        #castZone { cursor: pointer; }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen flex flex-col selection:bg-cyan-500 selection:text-slate-950">
+
+    <!-- Full-screen sea, stays fixed behind all content while you scroll -->
+    <div class="sea-scene">
+        <div class="absolute top-0 inset-x-0 h-[58%] bg-gradient-to-b from-sky-400 via-sky-500 to-sky-700"></div>
+        <div class="absolute bottom-0 inset-x-0 h-[42%] bg-gradient-to-b from-blue-700 via-blue-800 to-blue-950"></div>
+
+        <div class="absolute top-14 right-24 w-28 h-28 rounded-full bg-yellow-100 blur-md opacity-90"></div>
+        <div class="absolute top-20 left-1/4 w-28 h-8 bg-white/70 rounded-full blur-sm drift"></div>
+        <div class="absolute top-32 left-1/3 w-20 h-6 bg-white/50 rounded-full blur-sm drift" style="animation-delay:3s;"></div>
+
+        <svg class="absolute left-0 w-[200%] wave-scroll-back opacity-70" style="top: 56%;" viewBox="0 0 2880 60" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+            <path d="M0,30 C240,55 480,5 720,30 C960,55 1200,5 1440,30 C1680,55 1920,5 2160,30 C2400,55 2640,5 2880,30 L2880,60 L0,60 Z" fill="#0c3b63"/>
+        </svg>
+        <svg class="absolute left-0 w-[200%] wave-scroll-front opacity-90" style="top: 57.5%;" viewBox="0 0 2880 44" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+            <path d="M0,22 C240,40 480,4 720,22 C960,40 1200,4 1440,22 C1680,40 1920,4 2160,22 C2400,40 2640,4 2880,22 L2880,44 L0,44 Z" fill="#155a8a"/>
+        </svg>
+
+        <div class="absolute bottom-20 left-1/3 w-40 h-40 rounded-full bg-cyan-300 blur-3xl opacity-20 drift"></div>
+        <div class="absolute bottom-10 right-1/4 w-32 h-32 rounded-full bg-teal-200 blur-3xl opacity-20 drift" style="animation-delay:5s;"></div>
+    </div>
+
+    <header class="relative z-20 border-b border-cyan-900/30 bg-slate-900/40 backdrop-blur-md sticky top-0">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-xl shadow-lg shadow-cyan-500/20">
+                    🎣
+                </div>
+                <div>
+                    <h1 class="font-extrabold text-lg tracking-tight bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
+                        ABYSSAL WATERS
+                    </h1>
+                    <p class="text-xs text-slate-200/80 font-medium">Fishing RNG Simulator</p>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-3">
+                <div class="bg-slate-800/80 border border-slate-700/60 rounded-xl px-3.5 py-1.5 flex items-center space-x-2">
+                    <span class="text-xs text-slate-300 uppercase font-semibold tracking-wider">Bucket:</span>
+                    <span id="totalCountText" class="text-cyan-300 font-bold text-sm">0 / 20</span>
+                </div>
+
+                <button onclick="resetGame()" class="bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl px-3 py-1.5 text-xs font-semibold transition active:scale-95">
+                    Empty Bucket 🗑️
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Cast zone: click anywhere here, or press SPACE, to cast your line -->
+    <section id="castZone" class="relative z-10 min-h-[70vh] flex items-center select-none">
+        <div class="w-full px-4 sm:px-12">
+            <div id="displayCard" class="max-w-sm bg-slate-900/70 border-2 border-slate-800 rounded-3xl p-6 backdrop-blur-xl transition-all duration-300 relative overflow-hidden glow-common">
+
+                <div id="rarityBgGlow" class="absolute inset-0 bg-slate-500/5 transition-colors duration-500"></div>
+                <div class="shimmer rounded-3xl"></div>
+
+                <div class="relative z-10 flex flex-col items-center text-center">
+
+                    <div class="mb-4">
+                        <span id="fishRarityBadge" class="px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-slate-800 text-slate-300 border border-slate-700 shadow-sm">
+                            Ready to Cast
+                        </span>
+                    </div>
+
+                    <div class="relative group my-2">
+                        <div id="imageRing" class="w-40 h-40 sm:w-48 sm:h-48 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-center p-4 shadow-inner relative overflow-hidden">
+                            <img id="fishImageDisplay" src="Basic_Fih.png" onerror="handleImageError(this)" alt="Fish drawing preview" class="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105">
+
+                            <div class="shimmer rounded-2xl"></div>
+
+                            <div id="reelingOverlay" class="absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center hidden">
+                                <svg class="animate-spin h-8 w-8 text-cyan-400 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span id="overlayText" class="text-xs font-semibold text-cyan-300 tracking-wider">WAITING FOR BITE...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h2 id="fishNameText" class="text-xl sm:text-2xl font-extrabold text-slate-100 mt-3 tracking-tight">
+                        Cast your line!
+                    </h2>
+                    <p id="fishSubtext" class="text-sm text-slate-400 mt-1 max-w-xs">
+                        Fish are waiting in these waters. (Limit: 20 fish)
+                    </p>
+
+                    <div class="w-full bg-slate-950/80 rounded-full h-1.5 mt-5 overflow-hidden border border-slate-800/60">
+                        <div id="cooldownBar" class="bg-gradient-to-r from-cyan-500 to-blue-500 h-full w-0 transition-all"></div>
+                    </div>
+
+                    <p id="castHint" class="text-xs text-cyan-300/80 mt-4 font-semibold tracking-wide">
+                        🎣 Click anywhere or press SPACE to cast your line
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <main class="relative z-10 max-w-6xl mx-auto px-4 pb-10 w-full space-y-8">
+
+        <section class="space-y-4">
+            <h3 class="text-base font-bold text-slate-200 tracking-wide uppercase text-xs flex items-center space-x-2">
+                <span>📦</span>
+                <span>My Fish Stash</span>
+            </h3>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between hover:border-slate-700 transition backdrop-blur-sm">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-bold text-slate-400">Common</span>
+                        <span class="text-[10px] font-semibold text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded">50%</span>
+                    </div>
+                    <div class="mt-3 flex items-baseline justify-between">
+                        <span id="commonCountText" class="text-2xl font-black text-slate-200">0</span>
+                        <span class="text-xs text-slate-500">caught</span>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900/60 border border-emerald-900/40 rounded-2xl p-4 flex flex-col justify-between hover:border-emerald-700/50 transition backdrop-blur-sm">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-bold text-emerald-400">Uncommon</span>
+                        <span class="text-[10px] font-semibold text-emerald-500/80 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800/40">30%</span>
+                    </div>
+                    <div class="mt-3 flex items-baseline justify-between">
+                        <span id="uncommonCountText" class="text-2xl font-black text-emerald-300">0</span>
+                        <span class="text-xs text-slate-500">caught</span>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900/60 border border-sky-900/40 rounded-2xl p-4 flex flex-col justify-between hover:border-sky-700/50 transition backdrop-blur-sm">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-bold text-sky-400">Rare</span>
+                        <span class="text-[10px] font-semibold text-sky-500/80 bg-sky-950/60 px-1.5 py-0.5 rounded border border-sky-800/40">13%</span>
+                    </div>
+                    <div class="mt-3 flex items-baseline justify-between">
+                        <span id="rareCountText" class="text-2xl font-black text-sky-300">0</span>
+                        <span class="text-xs text-slate-500">caught</span>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900/60 border border-purple-900/40 rounded-2xl p-4 flex flex-col justify-between hover:border-purple-700/50 transition backdrop-blur-sm">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-bold text-purple-400">Epic</span>
+                        <span class="text-[10px] font-semibold text-purple-400/80 bg-purple-950/60 px-1.5 py-0.5 rounded border border-purple-800/40">6%</span>
+                    </div>
+                    <div class="mt-3 flex items-baseline justify-between">
+                        <span id="epicCountText" class="text-2xl font-black text-purple-300">0</span>
+                        <span class="text-xs text-slate-500">caught</span>
+                    </div>
+                </div>
+
+                <div class="col-span-2 sm:col-span-1 bg-gradient-to-b from-amber-950/30 to-slate-900/60 border border-amber-500/30 rounded-2xl p-4 flex flex-col justify-between hover:border-amber-500/60 transition backdrop-blur-sm">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-bold text-amber-400">Legendary</span>
+                        <span class="text-[10px] font-bold text-amber-300 bg-amber-950 px-1.5 py-0.5 rounded border border-amber-600/50">1%</span>
+                    </div>
+                    <div class="mt-3 flex items-baseline justify-between">
+                        <span id="legendaryCountText" class="text-2xl font-black text-amber-300">0</span>
+                        <span class="text-xs text-slate-500">caught</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="space-y-4">
+            <h3 class="text-base font-bold text-slate-200 tracking-wide uppercase text-xs flex items-center space-x-2">
+                <span>📜</span>
+                <span>Recent Catches Log</span>
+            </h3>
+
+            <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 backdrop-blur-sm">
+                <div id="logContainer" class="space-y-2 max-h-48 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-800">
+                    <div class="text-xs text-slate-500 italic py-2 text-center" id="emptyLogMsg">
+                        No fish caught yet. Cast your line above!
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // ============================================
+        // Deep Sea Fishing RNG — click/space to cast, timed reel-in
+        // ============================================
+
+        let totalCaught = 0;
+        let maxFishLimit = 20;
+
+        let commonCount = 0;
+        let uncommonCount = 0;
+        let rareCount = 0;
+        let epicCount = 0;
+        let legendaryCount = 0;
+
+        // Game state: idle -> waiting -> biting -> resolving -> idle
+        let gameState = "idle";
+        let biteTimeoutId = null;
+        let escapeTimeoutId = null;
+        const REEL_WINDOW_MS = 1400;
+
+        let startImageFile = "Basic_Fih.png";
+
+        let commonFish = [
+            { name: "Common Minnow", desc: "Just a basic little fish from the shallow waters. Fih.", image: "Basic_Fih.png" },
+            { name: "Boot", desc: "Not even a fish bro.", image: "boot.png" },
+            { name: "Silver Herring (Yellow)", desc: "A shiny little fish that swims in big schools.", image: "Yellow_Fih.png" },
+            { name: "Muddy Catfish", desc: "Lives near the bottom. Atleast it looks like some zebras.", image: "Zebra_Fih.png" }
+        ];
+
+        let uncommonFish = [
+            { name: "Emerald Trout", desc: "A nice green trout with bright shiny scales!", image: "Emerald_Fih.png" },
+            { name: "Amber Perch", desc: "Glimmers like gold in the afternoon sun.", image: "Flaming_Fih.png" },
+            { name: "Koi Fish", desc: "Its patterns can be very amazing to look at.", image: "koi.png" }
+        ];
+
+        let rareFish = [
+            { name: "Sapphire Shark", desc: "A powerful blue shark from deep ocean trenches.", image: "Diamond_Fih.png" }
+        ];
+
+        let epicFish = [
+            { name: "Atlantis Sturgeon", desc: "Its eggs are caviars! (Dont mind the bluish skin)", image: "Cold_Fih.png" }
+        ];
+
+        let legendaryFish = [
+            { name: "Evil Leviathan", desc: "I think you're its prey if you're not careful", image: "Evil_Fih.png" },
+            { name: "The Fih", desc: "Square. Unknown. Never been disccovered before", image: "Geometric_Fih.png" }
+        ];
+
+        // -------- Cast triggers: click the cast zone, or press SPACE --------
+        document.getElementById("castZone").addEventListener("click", handleCastAction);
+        document.addEventListener("keydown", function (e) {
+            if (e.code !== "Space") return;
+            if (e.target && e.target.tagName === "BUTTON") return; // don't hijack the Empty Bucket button
+            e.preventDefault();
+            handleCastAction();
+        });
+
+        function handleCastAction() {
+            if (gameState === "idle") {
+                startCast();
+            } else if (gameState === "biting") {
+                reelIn();
+            }
+            // "waiting" state ignores clicks/space — nothing to do yet, fish hasn't bitten
+        }
+
+        function startCast() {
+            if (totalCaught >= maxFishLimit) return;
+            gameState = "waiting";
+
+            setBadge("Line in the water...", "px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-slate-800 text-slate-300 border border-slate-700 shadow-sm");
+            document.getElementById("castHint").innerText = "⏳ Waiting for a bite...";
+
+            let bar = document.getElementById("cooldownBar");
+            bar.style.transition = "none";
+            bar.style.width = "0%";
+
+            document.getElementById("overlayText").innerText = "WAITING FOR BITE...";
+            document.getElementById("reelingOverlay").classList.remove("hidden");
+
+            let waitDelay = 1200 + Math.random() * 2500;
+            biteTimeoutId = setTimeout(triggerBite, waitDelay);
+        }
+
+        function triggerBite() {
+            if (gameState !== "waiting") return;
+            gameState = "biting";
+
+            document.getElementById("reelingOverlay").classList.add("hidden");
+            setBadge("🎣 BITE! Reel it in!", "px-3.5 py-1 rounded-full text-xs font-extrabold uppercase tracking-widest bg-amber-500 text-slate-950 border border-amber-300 shadow-lg animate-pulse");
+            document.getElementById("castHint").innerText = "🎣 Click or press SPACE to reel it in!";
+
+            let bar = document.getElementById("cooldownBar");
+            bar.style.transition = "none";
+            bar.style.width = "100%";
+            void bar.offsetWidth;
+            bar.style.transition = `width ${REEL_WINDOW_MS}ms linear`;
+            bar.style.width = "0%";
+
+            escapeTimeoutId = setTimeout(fishEscaped, REEL_WINDOW_MS);
+        }
+
+        function reelIn() {
+            if (gameState !== "biting") return;
+            clearTimeout(escapeTimeoutId);
+            gameState = "resolving";
+            resolveCatch();
+        }
+
+        function fishEscaped() {
+            if (gameState !== "biting") return;
+            gameState = "resolving";
+
+            document.getElementById("fishNameText").innerText = "It got away!";
+            document.getElementById("fishSubtext").innerText = "Too slow on the reel — try again.";
+            setBadge("MISSED", "px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-slate-800 text-slate-400 border border-slate-700 shadow-sm");
+            setCard("bg-slate-900/70 border-2 border-slate-800 rounded-3xl p-6 backdrop-blur-xl transition-all duration-300 relative overflow-hidden glow-common", "absolute inset-0 bg-slate-500/5 transition-colors duration-500");
+
+            addToLog("A fish", "Missed", "text-slate-500", true);
+            finishRound();
+        }
+
+        function resolveCatch() {
+            let randomNumber = Math.random() * 100;
+
+            if (randomNumber < 50) {
+                catchCommon();
+            } else if (randomNumber < 80) {
+                catchUncommon();
+            } else if (randomNumber < 93) {
+                catchRare();
+            } else if (randomNumber < 99) {
+                catchEpic();
+            } else {
+                catchLegendary();
+            }
+
+            finishRound();
+        }
+
+        function finishRound() {
+            let bar = document.getElementById("cooldownBar");
+            bar.style.transition = "none";
+            bar.style.width = "0%";
+
+            gameState = "idle";
+
+            if (totalCaught >= maxFishLimit) {
+                document.getElementById("castHint").innerText = "🪣 Bucket full — empty it to fish again";
+            } else {
+                document.getElementById("castHint").innerText = "🎣 Click anywhere or press SPACE to cast again";
+            }
+        }
+
+        function setBadge(text, className) {
+            let badge = document.getElementById("fishRarityBadge");
+            badge.innerText = text;
+            badge.className = className;
+        }
+
+        function setCard(cardClass, glowClass) {
+            document.getElementById("displayCard").className = "max-w-sm " + cardClass;
+            document.getElementById("rarityBgGlow").className = glowClass;
+        }
+
+        function catchCommon() {
+            commonCount++;
+            totalCaught++;
+
+            let chosenFish = commonFish[Math.floor(Math.random() * commonFish.length)];
+            document.getElementById("fishNameText").innerText = chosenFish.name;
+            document.getElementById("fishSubtext").innerText = chosenFish.desc;
+            setBadge("COMMON - 50%", "px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-slate-800 text-slate-300 border border-slate-700 shadow-sm");
+            setCard("border-2 border-slate-700 rounded-3xl p-6 backdrop-blur-xl transition-all duration-300 relative overflow-hidden glow-common bg-slate-900/70", "absolute inset-0 bg-slate-500/5 transition-colors duration-500");
+            document.getElementById("fishImageDisplay").src = chosenFish.image;
+
+            updateInventoryNumbers();
+            addToLog(chosenFish.name, "Common", "text-slate-400");
+        }
+
+        function catchUncommon() {
+            uncommonCount++;
+            totalCaught++;
+
+            let chosenFish = uncommonFish[Math.floor(Math.random() * uncommonFish.length)];
+            document.getElementById("fishNameText").innerText = chosenFish.name;
+            document.getElementById("fishSubtext").innerText = chosenFish.desc;
+            setBadge("UNCOMMON - 30%", "px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-emerald-950 text-emerald-300 border border-emerald-700/50 shadow-sm");
+            setCard("border-2 border-emerald-600/50 rounded-3xl p-6 backdrop-blur-xl transition-all duration-300 relative overflow-hidden glow-uncommon bg-slate-900/70", "absolute inset-0 bg-emerald-500/10 transition-colors duration-500");
+            document.getElementById("fishImageDisplay").src = chosenFish.image;
+
+            updateInventoryNumbers();
+            addToLog(chosenFish.name, "Uncommon", "text-emerald-400");
+        }
+
+        function catchRare() {
+            rareCount++;
+            totalCaught++;
+
+            let chosenFish = rareFish[Math.floor(Math.random() * rareFish.length)];
+            document.getElementById("fishNameText").innerText = chosenFish.name;
+            document.getElementById("fishSubtext").innerText = chosenFish.desc;
+            setBadge("RARE - 13%", "px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-sky-950 text-sky-300 border border-sky-700/50 shadow-sm");
+            setCard("border-2 border-sky-500/60 rounded-3xl p-6 backdrop-blur-xl transition-all duration-300 relative overflow-hidden glow-rare bg-slate-900/70", "absolute inset-0 bg-sky-500/10 transition-colors duration-500");
+            document.getElementById("fishImageDisplay").src = chosenFish.image;
+
+            updateInventoryNumbers();
+            addToLog(chosenFish.name, "Rare", "text-sky-400");
+        }
+
+        function catchEpic() {
+            epicCount++;
+            totalCaught++;
+
+            let chosenFish = epicFish[Math.floor(Math.random() * epicFish.length)];
+            document.getElementById("fishNameText").innerText = chosenFish.name;
+            document.getElementById("fishSubtext").innerText = chosenFish.desc;
+            setBadge("EPIC - 6%", "px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-purple-950 text-purple-300 border border-purple-700/50 shadow-sm");
+            setCard("border-2 border-purple-500/70 rounded-3xl p-6 backdrop-blur-xl transition-all duration-300 relative overflow-hidden glow-epic bg-slate-900/70", "absolute inset-0 bg-purple-500/15 transition-colors duration-500");
+            document.getElementById("fishImageDisplay").src = chosenFish.image;
+
+            updateInventoryNumbers();
+            addToLog(chosenFish.name, "Epic", "text-purple-400");
+        }
+
+        function catchLegendary() {
+            legendaryCount++;
+            totalCaught++;
+
+            let chosenFish = legendaryFish[Math.floor(Math.random() * legendaryFish.length)];
+            document.getElementById("fishNameText").innerText = chosenFish.name;
+            document.getElementById("fishSubtext").innerText = chosenFish.desc;
+            setBadge("✨ LEGENDARY - 1% ✨", "px-3.5 py-1 rounded-full text-xs font-extrabold uppercase tracking-widest bg-amber-500 text-slate-950 border border-amber-300 shadow-lg animate-pulse");
+            setCard("border-2 border-amber-400 rounded-3xl p-6 backdrop-blur-xl transition-all duration-300 relative overflow-hidden glow-legendary bg-slate-900/80", "absolute inset-0 bg-amber-500/20 transition-colors duration-500");
+            document.getElementById("fishImageDisplay").src = chosenFish.image;
+
+            updateInventoryNumbers();
+            addToLog(chosenFish.name, "Legendary", "text-amber-400 font-bold");
+        }
+
+        function updateInventoryNumbers() {
+            document.getElementById("totalCountText").innerText = totalCaught + " / " + maxFishLimit;
+            document.getElementById("commonCountText").innerText = commonCount;
+            document.getElementById("uncommonCountText").innerText = uncommonCount;
+            document.getElementById("rareCountText").innerText = rareCount;
+            document.getElementById("epicCountText").innerText = epicCount;
+            document.getElementById("legendaryCountText").innerText = legendaryCount;
+        }
+
+        function addToLog(fishName, rarityName, textColorClass, isMiss) {
+            let container = document.getElementById("logContainer");
+
+            let emptyMsg = document.getElementById("emptyLogMsg");
+            if (emptyMsg) emptyMsg.remove();
+
+            let now = new Date();
+            let timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            let verb = isMiss ? "Lost" : "Caught";
+
+            let logRow = document.createElement("div");
+            logRow.className = "flex items-center justify-between text-xs py-1.5 px-3 bg-slate-950/40 rounded-lg border border-slate-800/60";
+            logRow.innerHTML =
+                '<div class="flex items-center space-x-2">' +
+                    '<span class="text-slate-500 font-mono text-[10px]">' + timeString + '</span>' +
+                    '<span class="text-slate-300 font-medium">' + verb + ' <strong class="' + textColorClass + '">' + fishName + '</strong></span>' +
+                '</div>' +
+                '<span class="' + textColorClass + ' font-bold text-[10px] uppercase tracking-wide">' + rarityName + '</span>';
+
+            container.insertBefore(logRow, container.firstChild);
+
+            if (container.children.length > 15) {
+                container.removeChild(container.lastChild);
+            }
+        }
+
+        function resetGame() {
+            clearTimeout(biteTimeoutId);
+            clearTimeout(escapeTimeoutId);
+
+            totalCaught = 0;
+            commonCount = 0;
+            uncommonCount = 0;
+            rareCount = 0;
+            epicCount = 0;
+            legendaryCount = 0;
+            gameState = "idle";
+
+            updateInventoryNumbers();
+
+            document.getElementById("reelingOverlay").classList.add("hidden");
+
+            let bar = document.getElementById("cooldownBar");
+            bar.style.transition = "none";
+            bar.style.width = "0%";
+
+            document.getElementById("fishNameText").innerText = "Cast your line!";
+            document.getElementById("fishSubtext").innerText = "Fish are waiting in these waters. (Limit: 20 fish)";
+            document.getElementById("castHint").innerText = "🎣 Click anywhere or press SPACE to cast your line";
+            setBadge("Ready to Cast", "px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-slate-800 text-slate-300 border border-slate-700 shadow-sm");
+            setCard("border-2 border-slate-800 rounded-3xl p-6 backdrop-blur-xl transition-all duration-300 relative overflow-hidden glow-common bg-slate-900/70", "absolute inset-0 bg-slate-500/5 transition-colors duration-500");
+
+            document.getElementById("fishImageDisplay").src = startImageFile;
+            document.getElementById("logContainer").innerHTML = '<div class="text-xs text-slate-500 italic py-2 text-center" id="emptyLogMsg">No fish caught yet. Cast your line above!</div>';
+        }
+
+        function handleImageError(img) {
+            img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="%230f172a" rx="16"/><text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" fill="%2338bdf8" font-size="48">🐟</text><text x="50%" y="75%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8" font-size="12" font-family="sans-serif">Custom Drawing</text></svg>';
+        }
+
+        window.onload = function () {
+            document.getElementById("fishImageDisplay").src = startImageFile;
+            updateInventoryNumbers();
+        };
+    </script>
+</body>
+</html>
